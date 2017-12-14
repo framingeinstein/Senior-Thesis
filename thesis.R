@@ -24,44 +24,36 @@ model %>% count(z, Bz) %>% filter(Bz == max(Bz))
 
 #get 10% of dats
 model_sampled <- model[sample(nrow(model), nrow(model) / 100), ]
-s <- interp(model_sampled$transverse, model_sampled$longitudinal, model_sampled$Bx)
 
-m <- data.matrix(model_sampled[c("longitudinal", "Bz", "transverse")])
-p <- plot_ly(x=s$x, y=s$y, z=s$z) %>% add_surface()
-#p <- plot_ly(x = ~model_sampled$longitudinal, y = ~model_sampled$transverse, z = ~model_sampled$Bz, type = "mesh3d")
-p
 
-(my_sheets <- gs_ls())
-my_sheets <- subset(my_sheets, author == 'jmorg003' & sheet_title != 'solenoid-map-macs-version.xlsx')
-for (row in 1:nrow(my_sheets)) {
-  name <- my_sheets[row, "sheet_title"][[1]]
-  key  <- my_sheets[row, "sheet_key"][[1]]
-  name <- gsub("[.]xlsx", "", gsub("Run", "", name))
-  name <- gsub(" ", "", name)
-  name <- gsub("Sector ?", "", name)
-  name <- gsub("Hole ?", "",name)
-  parts <- strsplit(name, "_")[[1]]
-  print(key)
-  gap <- gs_key(key)
-  run <- gap %>%
-    gs_read(ws = "Run Data")
-  colnames(run) <- c("z", "Bz", "By", "Bx")
-  run$Hole <- parts[5]
-  run$Sector <- parts[4]
-  run$Run <- parts[1]
-  
-  if(exists("rundata")){
-    rundata <- rbind(rundata, run)
-  } else {
-    rundata <- run
-  }
+file.list <- list.files("Measurement Raw Data", pattern='*.xlsx')
+if(exists("rundata")){ rm(rundata) }
+for (name in file.list) {
+
+    tmp <- gsub("[.]xlsx", "", gsub("Run", "", name))
+    tmp <- gsub(" ", "", tmp)
+    tmp <- gsub("Sector ?", "", tmp)
+    tmp <- gsub("Hole ?", "",tmp)
+    
+    parts <- strsplit(tmp, "_")[[1]]
+    
+    run <- read.xlsx(paste("Measurement Raw Data", name, sep="/"), sheetName = "Run Data")
+    colnames(run) <- c("z", "Bz", "By", "Bx")
+    
+    run$Hole <- parts[5]
+    run$Sector <- parts[4]
+    run$Run <- parts[1]
+    run$Name <- name
+    
+    if(exists("rundata")){
+      rundata <- rbind(rundata, run)
+    } else {
+      rundata <- run
+    }
 }
 
 rundata$Run <- as.factor(rundata$Run)
-
-
-
-
+rm(mind)
 for (ch in levels(rundata$Run)) {
   print(ch)
   center <- getCenterReflectedChiSQ(subset(rundata, Run == ch))
@@ -73,12 +65,31 @@ for (ch in levels(rundata$Run)) {
   }
 }
 
+center <- getCenterReflectedChiSQ(subset(rundata, Run == "307"))
+
+R307 <- subset(rundata, Run == "307")
+
+rundata$BxBz <- rundata$Bx / rundata$Bz
+rundata$ByBz <- rundata$By / rundata$Bz
+
 mind$RunLength <- apply(mind, 1, function(x){
   if(x['z'] > 60) return('L')
   return('S')
 })
 
-colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "CHI2", "RunLength")
+mind$r <- apply(mind, 1, function(x){
+  if(x[Run] %in% c(264,270,271) ){
+    return(0)
+  }
+  if(x[Run] %in% c(264,270,271) ){
+    return(0)
+  }
+  if(x[Run] %in% c(264,270,271) ){
+    return(0)
+  }
+})
+
+colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "File", "CHI2", "RunLength")
 
 
 
@@ -92,9 +103,11 @@ model_lcenter <- subset(model, longitudinal == 0)
 #model_sampled <- model[sample(nrow(model), nrow(model) / 100), ]
 
 short <- subset(rundata, RunLength == 'S')
+
 long <- subset(rundata, RunLength == 'L')
 
 sector0 <- subset(rundata, Sector == 0)
+
 sector0_short <- subset(sector0, RunLength == 'S')
 sector0_long <- subset(sector0, RunLength == 'L')
 
@@ -114,11 +127,11 @@ mean_s <- mean(subset(mind, RunLength == 'S')$CenterZ)
 
 #center data sets on 0
 
-sector0_short$z <- sector0_short$z - mean_s
-sector0_long$z <- sector0_long$z - mean_l
+short$z <- short$z - mean_s
+long$z <- long$z - mean_l
 
 #convert shorts to cm from mm
-sector0_short$z <- sector0_short$z / 10
+short$z <- short$z / 10
 
 s0s <- plot_ly(data = sector0_short, x = ~z, y = ~Bz, type = 'scatter', mode="markers") %>%
   layout(shapes=list(type='line', x0= mean_s, x1= mean_s, y0=min(sector0_short$Bz), y1=max(sector0_short$Bz)),
@@ -133,6 +146,8 @@ s0l <- plot_ly(data = sector0_long, x = ~z, y = ~Bz) %>%
        yaxis = list(title = "Bx", showgrid = TRUE))
 
 sector0_recomb <- rbind(sector0_short, sector0_long)
+
+recomb <- rbind(short, long)
 
 model_center$RunLength <- 'M'
 model_center$Sector <- '0'
@@ -174,12 +189,20 @@ s0rwm_scaled <- plot_ly(data = sector0_recomb_scaled_with_model, x = ~z, y = ~Bz
 
 s0rwm_scaled <- plot_ly(data = sector0_recomb_scaled_with_model, x = ~z, y = ~Bz, color = ~RunLength)
 
-s0rpx <- plot_ly(data = sector0_recomb, x = ~z, y = ~Bx, color = ~Run)
-s0rpy <- plot_ly(data = sector0_recomb, x = ~z, y = ~By, color = ~Run)
-
-
+s0rpx <- plot_ly(data = center_sector0_recomb, x = ~Bz, y = ~Bx, color = ~Run)
+s0rpy <- plot_ly(data = center_sector0_recomb, x = ~Bz, y = ~By, color = ~Run)
+s0rpyz <- plot_ly(data = center_sector0_recomb, x = ~z, y = ~Bz, color = ~Run)
+s0rpxz <- plot_ly(data = center_sector0_recomb, x = ~z, y = ~Bx, color = ~Run)
 test <- convolve(sector0_recomb$z, sector0_recomb$Bx, conj = TRUE, type = c("circular", "open", "filter"))
 
+
+
+plt <- plot_ly(data = s0rwm_scaled, x = ~z, y = ~By, color = ~Run)
+pltz <- plot_ly(data = sector0_scaled, x = ~z, y = ~By, color = ~Run)
+
+#plot By / Bz only need to split because they are all 
+#appears to be correlated in Bx  
+#Bz 
 
 #write.xlsx(sector0_recomb_scaled_with_model, file="Analysis.xlsx", sheetName="sector0_recomb_scaled_with_model", 
 #           col.names=TRUE, row.names=FALSE, append=TRUE)
@@ -194,7 +217,22 @@ splineData <- data.frame(
 s0rpxs <- plot_ly(data = splineData, x = ~x, y = ~y)
 
 #Null 
-fit <- lm(Bx ~ Bz, sector0_recomb)
+center_sector0_recomb <- subset(sector0_recomb, Run %in% c(286))
+fitBx <- lm(Bx ~ Bz, center_sector0_recomb)
+fitBy <- lm(By ~ Bz, center_sector0_recomb)
+
+pltsBx <- RegressionPlots(fitBx)
+pltsBy <- RegressionPlots(fitBy)
+
+center_bz_bx %>%
+  plot_ly(data = center_sector0_recomb, x = ~z, color = ~Run) %>% 
+  add_markers(y = ~Bz) %>% 
+  add_lines(x = ~Bz, y = fitted(fitBx))
+
+center_bz_by <- plot_ly(data = sector0_recomb, x = ~z, y = ~Bx, color = ~Run)
+
+summary(fitBx)
+summary(fitBy)
 gfit <- glm(formula = Bx ~ Bz, family = binomial, data = sector0_recomb)
 prd <- predict(fit)
 # Scale Factor
@@ -204,6 +242,6 @@ prd <- predict(fit)
 # Then we can fit.
 # Find the center point by flipping
 # Bz  fit to the model
-  
-
+#By / Bz vs z
+#Bx / Bz vs z
 

@@ -121,9 +121,25 @@ for (ch in levels(rundata$Run)) {
   }
 }
 
-rundata$BxBz <- rundata$Bx / rundata$Bz
-rundata$ByBz <- rundata$By / rundata$Bz
+rundata$BxOverBz <- rundata$Bx / rundata$Bz
+rundata$ByOverBz <- rundata$By / rundata$Bz
 mind$z <- as.numeric(mind$z)
+
+colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "File", "CHI2", "Current", "Comments")
+
+mind$RunLength <- apply(mind, 1, function(x){
+  print(as.numeric(x['CenterZ']))
+  if(as.numeric(x['z']) > 60) return('L')
+  return('S')
+})
+
+
+mind$Good <- apply(mind, 1, function(x){
+  #print(as.numeric(x['CenterZ']))
+  if(as.numeric(x['Current']) <= 1000) return('N')
+  if(as.numeric(x['Run']) %in% c(296,298)) return ('N')
+  return('Y')
+})
 
 mind$R <- apply(mind, 1, function(x){
   
@@ -132,48 +148,20 @@ mind$R <- apply(mind, 1, function(x){
   return(1.25)
 })
 
-mind$RunLength <- apply(mind, 1, function(x){
-  print(as.numeric(x['z']))
-  if(as.numeric(x['z']) > 60) return('L')
-  return('S')
-})
+#mind$ProbeRotation <-  apply(mind, 1, function(x){
+#  if(x['Run']) %in% c()) return(90)
+#if(x['Run']) %in% c()) return(90)
+#
+#})
 
 
+colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "File", "CHI2", "Current", "Comments", "RunLength", "Good", "R")
 
-
-mind$Good <- apply(mind, 1, function(x){
-  print(as.numeric(x['z']))
-  if(as.numeric(x['Current']) <= 1000) return('N')
-  return('Y')
-})
-
-write.xlsx(mind, "Master Data File.xlsx", "Meta")
+write.xlsx(mind, "Master Data File.xlsx", "Meta", row.names = FALSE, append = FALSE)
 
 for (ch in levels(rundata$Run)) {
-  write.xlsx(subset(rundata, Run == ch), "Master Data File.xlsx", ch, append = TRUE)
+  write.xlsx(subset(rundata, Run == ch), "Master Data File.xlsx", ch, append = TRUE, row.names = FALSE)
 }
-
-
-
-
-sp1 <- plot_ly(data = R307, x = ~z, y = ~Bz, color = ~Sector)
-sp2 <- plot_ly(data = data_reflected, x = ~z, y = ~Bz, color = ~Sector)
-
-
-
-mind$r <- apply(mind, 1, function(x){
-  if(x[Run] %in% c(264,270,271) ){
-    return(0)
-  }
-  if(x[Run] %in% c(264,270,271) ){
-    return(0)
-  }
-  if(x[Run] %in% c(264,270,271) ){
-    return(0)
-  }
-})
-
-colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "File", "CHI2", "RunLength")
 
 
 
@@ -186,119 +174,117 @@ model_lcenter <- subset(model, longitudinal == 0)
 
 #model_sampled <- model[sample(nrow(model), nrow(model) / 100), ]
 
-short <- subset(rundata, RunLength == 'S')
+short <- subset(rundata, RunLength == 'S' && Good == 'Y')
+long <- subset(rundata, RunLength == 'L' && Good == 'Y')
+rundata$R <- as.numeric(rundata$R)
 
-long <- subset(rundata, RunLength == 'L')
+mean_l <- mean(subset(mind, RunLength == 'L' & Good == 'Y')$CenterZ)
+mean_s <- mean(subset(mind, RunLength == 'S' & Good == 'Y')$CenterZ)
 
-sector0 <- subset(rundata, Sector == 0)
+rundata$NormalizedZ <- apply(rundata, 1, function(x){
+  if(x['RunLength'] == 'S'){
+    return((as.numeric(x['z']) - mean_s) / 10 )
+  }
+  
+  return(as.numeric(x['z']) - mean_l)
+  
+})
 
-sector0_short <- subset(sector0, RunLength == 'S')
-sector0_long <- subset(sector0, RunLength == 'L')
+rundata$NormalizedBy <- apply(rundata, 1, function(x){
+  if(x['RunLength'] == 'S'){
+    return((as.numeric(x['z']) - mean_s) / 10 )
+  }
+  
+  return(as.numeric(x['z']) - mean_l)
+  
+})
+
+rundata$NormalizedBx <- apply(rundata, 1, function(x){
+  if(x['RunLength'] == 'S'){
+    return((as.numeric(x['z']) - mean_s) / 10 )
+  }
+  
+  return(as.numeric(x['z']) - mean_l)
+  
+})
 
 
+r0 <- subset(rundata, R == 0)
+
+r0_short <- subset(r0,  RunLength == 'S')
+r0_long <- subset(r0,  RunLength == 'L')
 
 #sector0_short$z <- sector0_short$z
 
-sp <- plot_ly(data = short, x = ~z, y = ~Bz, color = ~Sector)
-lp <- plot_ly(data = long, x = ~z, y = ~Bz, color = ~Sector)
-ap <- plot_ly(data = rundata, x = ~z, y = ~Bz, color = ~Sector)
+
+ap <- plot_ly(data = subset(rundata, Good == 'Y'), x = ~NormalizedZ, y = ~Bz, color = ~Run)
+
 mp <- plot_ly(data = model_center, x = ~z, y = ~Bz)
+
 mlp <- plot_ly(data = model_lcenter, x = ~transverse, y = ~Bz)
 s0 <- plot_ly(data = sector0, x = ~z, y = ~Bz)
 
-mean_l <- mean(subset(mind, RunLength == 'L')$CenterZ)
-mean_s <- mean(subset(mind, RunLength == 'S')$CenterZ)
+
 
 #center data sets on 0
 
-short$z <- short$z - mean_s
-long$z <- long$z - mean_l
-
-#convert shorts to cm from mm
-short$z <- short$z / 10
-
-s0s <- plot_ly(data = sector0_short, x = ~z, y = ~Bz, type = 'scatter', mode="markers") %>%
-  layout(shapes=list(type='line', x0= mean_s, x1= mean_s, y0=min(sector0_short$Bz), y1=max(sector0_short$Bz)),
-         title = 'This is the Title',
-         xaxis = list(title = "X-Axis", showgrid = TRUE),
-         yaxis = list(title = "Y-Axis", showgrid = TRUE))
-
-s0l <- plot_ly(data = sector0_long, x = ~z, y = ~Bz) %>%
-  layout(shapes=list(type='line', x0= mean_l, x1= mean_l, y0=min(sector0_long$Bz), y1=max(sector0_long$Bz)),
-       title = 'This is the Title',
-       xaxis = list(title = "Z (cm)", showgrid = TRUE),
-       yaxis = list(title = "Bx", showgrid = TRUE))
-
-sector0_recomb <- rbind(sector0_short, sector0_long)
+r0_recomb <- rbind(r0_short, r0_long)
 
 recomb <- rbind(short, long)
 
 model_center$RunLength <- 'M'
 model_center$Sector <- '0'
 model_center$Hole <- 'M'
-model_center$Run <- 0
+model_center$Run <- 1
 model_center$CenterZ <- 0
 model_center$CenterBz <- 0
 model_center$CenterBy<- 0
 model_center$CenterBx <- 0
 model_center$CHI2 <- 0
 model_center$By <- 0
+model_center$Current <- 0
+model_center$Comments <- ""
+model_center$Name <- "Model"
+model_center$File <- "Model"
+model_center$Good <- "Y"
+model_center$NormalizedZ <- model_center$z 
 model_center$transverse <- NULL
 model_center$longitudinal <- NULL
-model_center$r <- NULL
+model_center$R <- 0
 
 model_center$RunLength <- as.factor(model_center$RunLength)
 model_center$Hole <- as.factor(model_center$Hole)
 model_center$Sector <- as.factor(model_center$Sector)
 model_center$Run <- as.factor(model_center$Run)
 
-sector0_recomb_with_model <- rbind(sector0_recomb, model_center)
+r0_with_model <- rbind(r0, model_center)
 
 #write.xlsx(report.wide, file="Summaries.xlsx", sheetName=sheet, 
 #           col.names=TRUE, row.names=FALSE, append=TRUE)
 
 modelmax <- max(model_center$Bz)
-sector0max <- max(sector0_recomb$Bz)
-scalefactor <- modelmax / sector0max
-s0r <- plot_ly(data = sector0_recomb, x = ~z, y = ~Bz, color = ~RunLength)
+r0max <- max(r0$Bz)
+scalefactor <- modelmax / r0max
+s0r <- plot_ly(data = r0, x = ~NormalizedZ, y = ~Bz, color = ~RunLength)
 s0rwm <- plot_ly(data = sector0_recomb_with_model, x = ~z, y = ~Bz, color = ~RunLength)
-sector0_recomb_with_model[sector0_recomb_with_model$RunLength=="M"]
 
-sector0_scaled <- sector0_recomb
-sector0_scaled$Bz = sector0_scaled$Bz * scalefactor
-sector0_scaled$RunLength <- 'AS'
-sector0_recomb_scaled_with_model <- rbind(sector0_recomb_with_model, sector0_scaled)
-s0rwm_scaled <- plot_ly(data = sector0_recomb_scaled_with_model, x = ~z, y = ~Bz, color = ~RunLength)
+r0_scaled <- r0
+r0_scaled$Bz = r0_scaled$Bz * scalefactor
+r0_scaled$RunLength <- 'AS'
+r0_with_model <- rbind(r0_with_model, r0_scaled)
+r0_with_model <- subset(r0_with_model, NormalizedZ > -100 &  NormalizedZ < 100)
+r0_with_model_scaled <- subset(r0_with_model, RunLength %in% c('AS', 'M'))
 
-
-s0rwm_scaled <- plot_ly(data = sector0_recomb_scaled_with_model, x = ~z, y = ~Bz, color = ~RunLength)
-
-s0rpx <- plot_ly(data = center_sector0_recomb, x = ~Bz, y = ~Bx, color = ~Run)
-s0rpy <- plot_ly(data = center_sector0_recomb, x = ~Bz, y = ~By, color = ~Run)
-s0rpyz <- plot_ly(data = center_sector0_recomb, x = ~z, y = ~Bz, color = ~Run)
-s0rpxz <- plot_ly(data = center_sector0_recomb, x = ~z, y = ~Bx, color = ~Run)
-test <- convolve(sector0_recomb$z, sector0_recomb$Bx, conj = TRUE, type = c("circular", "open", "filter"))
-
-
-
-plt <- plot_ly(data = s0rwm_scaled, x = ~z, y = ~By, color = ~Run)
-pltz <- plot_ly(data = sector0_scaled, x = ~z, y = ~By, color = ~Run)
-
-#plot By / Bz only need to split because they are all 
-#appears to be correlated in Bx  
-#Bz 
-
-#write.xlsx(sector0_recomb_scaled_with_model, file="Analysis.xlsx", sheetName="sector0_recomb_scaled_with_model", 
-#           col.names=TRUE, row.names=FALSE, append=TRUE)
+r0p <- plot_ly(data = r0_with_model_scaled, x = ~NormalizedZ, y = ~Bz, color = ~RunLength)
 
 splineData <- data.frame(
-  with(sector0_recomb, 
-       spline(z, Bx, xout = seq(-90, 90, by = 4))
+  with(r0, 
+       spline(NormalizedZ, Bx, xout = seq(-90, 90, by = 4))
   ),
   method = "spline()"
 )
 
-s0rpxs <- plot_ly(data = splineData, x = ~x, y = ~y)
+spp <- plot_ly(data = splineData, x = ~x, y = ~y)
 
 #Null 
 center_sector0_recomb <- subset(sector0_recomb, Run %in% c(286))

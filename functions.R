@@ -29,10 +29,15 @@ getCenterReflectedChiSQ <- function(data){
     d <- merge(data, data_reflected, by=c("z", "Sector", "Run", "Hole"), all = TRUE)
     
     # omit over lap
+    #print(head(d))
+    #print(d)
     d <- na.omit(d)
-    
-    d <- subset(d, z != x["z"])
-    if(nrow(d) < nrow(data) / 2){
+    #print(head(d))
+    #d <- subset(d, z != x["z"])
+    #print(d)
+    if(nrow(d) < nrow(data) / 4){
+      #print(nrow(d))
+      #print(nrow(data))
       return(99999999)
     }
     
@@ -42,7 +47,10 @@ getCenterReflectedChiSQ <- function(data){
     return(sum(d$chi))
   })
   
+  
+  
   #get the offset with the min chi2
+  #print(head(data))
   mindata <- subset(data, chi2 == min(data$chi2))
   return(mindata)
 }

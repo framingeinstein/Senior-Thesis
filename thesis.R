@@ -11,7 +11,7 @@ library(xlsx)
 library(stats)
 
 # Import model data
-model <- read.table("~/Desktop/ThesisData/ReferenceData/srr-solenoid.dat.txt")
+model <- read.table("ReferenceData/srr-solenoid.dat.txt")
 colnames(model) <- c("transverse", "longitudinal", "Bx", "Bz")
 #set z and r in cm instead of meters
 model$r <- model$transverse * 100
@@ -28,6 +28,7 @@ model_sampled <- model[sample(nrow(model), nrow(model) / 100), ]
 
 file.list <- list.files("Measurement Raw Data", pattern='*.xlsx')
 if(exists("rundata")){ rm(rundata) }
+if(exists("runinfo")){ rm(runinfo) }
 for (name in file.list) {
 
     tmp <- gsub("[.]xlsx", "", gsub("Run", "", name))
@@ -38,25 +39,80 @@ for (name in file.list) {
     parts <- strsplit(tmp, "_")[[1]]
     
     run <- read.xlsx(paste("Measurement Raw Data", name, sep="/"), sheetName = "Run Data")
+    info <- read.xlsx(paste("Measurement Raw Data", name, sep="/"), sheetName = "Run Info", header=FALSE)
     colnames(run) <- c("z", "Bz", "By", "Bx")
+    colnames(info) <- c("Key", "Value")
     
+    #print(info[6,]$Value)
+    
+    r <- as.character(parts[1])
+    current <- as.character(info[6,]$Value)
+    if(is.na(info[11,]$Value)){
+      comments <- ""
+    } else {
+      comments <- as.character(info[11,]$Value)
+    }
+    
+    #print(info[11,]$Value)
+    
+    info <- data.frame(Run = character(1), Current = character(1), Comments = character(1))
+    #info <- data.frame(r, current, comments)
+    info$Run <- r
+    info$Current <- current
+    info$Comments <- comments
+    #colnames(info) = c("Run", "Current", "Comments")
+    #print(info)
+    #print(current)
+    
+    #print(info)
     run$Hole <- parts[5]
     run$Sector <- parts[4]
     run$Run <- parts[1]
     run$Name <- name
+    
     
     if(exists("rundata")){
       rundata <- rbind(rundata, run)
     } else {
       rundata <- run
     }
+    
+    if(exists("runinfo")){
+      runinfo <- rbind(runinfo, info)
+    } else {
+      runinfo <- info
+    }
 }
 
+source("functions.R")
+# This performs a chi^2 minimization based on the reflection point 
 rundata$Run <- as.factor(rundata$Run)
+# Drop Bz = 0, 0 is not a valid value for Bz and indicates probe saturation
+rundata <- subset(rundata, Bz != 0)
+rundata <- subset(rundata, z <= 200)
 rm(mind)
 for (ch in levels(rundata$Run)) {
   print(ch)
   center <- getCenterReflectedChiSQ(subset(rundata, Run == ch))
+  if(nrow(center) == 0){
+    firstdr <- subset(rundata, Run == ch)[1,]
+    colnames(center) <- c("z","Bz","By","Bx","Hole","Sector","Run","Name","chi2")
+    center[nrow(center)+1,] <- NA
+    center$Run <- c(ch)
+    center$Name <- firstdr$Name
+    center$Sector <- firstdr$Sector
+    center$Hole <- firstdr$Hole
+
+    #center$
+  }
+  
+  info <- subset(runinfo, Run == ch)
+  center$Current <- info$Current
+  center$Comments <- info$Comments
+  
+  #print(head(center))
+  
+  #print(nrow(center))
   
   if(!exists("mind")){
     mind <-  center
@@ -65,17 +121,45 @@ for (ch in levels(rundata$Run)) {
   }
 }
 
-center <- getCenterReflectedChiSQ(subset(rundata, Run == "307"))
-
-R307 <- subset(rundata, Run == "307")
-
 rundata$BxBz <- rundata$Bx / rundata$Bz
 rundata$ByBz <- rundata$By / rundata$Bz
+mind$z <- as.numeric(mind$z)
+
+mind$R <- apply(mind, 1, function(x){
+  
+  if(as.numeric(x['Run']) %in% c(296,298,299,301,303,307)) return(30)
+  if(as.numeric(x['Run']) %in% c(270,271,308,309,310,311)) return(0)
+  return(1.25)
+})
 
 mind$RunLength <- apply(mind, 1, function(x){
-  if(x['z'] > 60) return('L')
+  print(as.numeric(x['z']))
+  if(as.numeric(x['z']) > 60) return('L')
   return('S')
 })
+
+
+
+
+mind$Good <- apply(mind, 1, function(x){
+  print(as.numeric(x['z']))
+  if(as.numeric(x['Current']) <= 1000) return('N')
+  return('Y')
+})
+
+write.xlsx(mind, "Master Data File.xlsx", "Meta")
+
+for (ch in levels(rundata$Run)) {
+  write.xlsx(subset(rundata, Run == ch), "Master Data File.xlsx", ch, append = TRUE)
+}
+
+
+
+
+sp1 <- plot_ly(data = R307, x = ~z, y = ~Bz, color = ~Sector)
+sp2 <- plot_ly(data = data_reflected, x = ~z, y = ~Bz, color = ~Sector)
+
+
 
 mind$r <- apply(mind, 1, function(x){
   if(x[Run] %in% c(264,270,271) ){

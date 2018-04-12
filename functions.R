@@ -12,7 +12,7 @@ jgc <- function()
 chisq <- function(data){
   #R2 <- 0;
   apply_chifunction <- function(f, e){
-    c2 <- ((as.numeric(f) - as.numeric(e)) ^ 2) / as.numeric(e)
+    c2 <- ((as.numeric(f) - as.numeric(e)) ^ 2) / abs(as.numeric(e))
     if(is.na(c2) || is.infinite(c2)){
       #print('na | inf --------')
       c2 <- 100000000 - 1
@@ -41,7 +41,7 @@ reflectHorizVert <- function(data, data_reflected, x){
   data_reflected$z <- apply(data, 1, function(y){
     reflectHorizontal(x["z"], y["z"])
   })
- 
+  
   data_reflected$NormalizedBy <- data_reflected$NormalizedBy * -1
   
   return(data_reflected)
@@ -62,7 +62,7 @@ reflectedCHISq <- function(x, data, data_reflected, comparer, reflector){
   d <- na.omit(d)
   #d[is.na(d)] <- 0
   
-
+  
   #d[is.na(d)] <- -10000000
   
   #print(head(d))
@@ -73,7 +73,7 @@ reflectedCHISq <- function(x, data, data_reflected, comparer, reflector){
     #print(nrow(data))
     return(99999999)
   }
- 
+  
   d <- comparer(d)#data.frame(d$Bz.x, d$Bz.y)
   colnames(d) <- c("f", "e")
   
@@ -124,7 +124,6 @@ getCenterReflectedChiSQ <- function(data){
   #data$chi2 <-apply(data, 1, function(x){
   #  return(reflectedCHISq(x, data, data_reflected, function(d){return(data.frame(d$Bz.x, d$Bz.y))}, reflectHoriz))
   #})
-  data$chi2 <- 0
   data$chi2Bz <-apply(data, 1, function(x){
     return(reflectedCHISq(x, data, data_reflected, function(d){return(data.frame(d$Bz.x, d$Bz.y))}, reflectHoriz))
   })
@@ -148,7 +147,7 @@ getCenterReflectedChiSQ <- function(data){
   minz <- subset(data, chi2Bz == min(data$chi2Bz))
   #minx <- subset(data, chi2Bx == min(data$chi2Bx))
   #miny <- subset(data, chi2By == min(data$chi2By))
- 
+  
   #if(nrow(minx)) minz$CenterZBx <- minx$z
   #if(nrow(miny)) minz$CenterZBy <- miny$z
   return(minz)
@@ -369,6 +368,7 @@ master_lookup <- function(){
     center <- getCenterReflectedChiSQ(subset(rundata, Run == ch))
     if(nrow(center) == 0){
       firstdr <- subset(rundata, Run == ch)[1,]
+      print(colnames(center))
       colnames(center) <- c("z","Bz","By","Bx","Hole","Sector","Run","Name","chi2")
       center[nrow(center)+1,] <- NA
       center$Run <- c(ch)
@@ -398,7 +398,7 @@ master_lookup <- function(){
     }
   }
   
-  colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "File", "CHI2", "CHI2Bz", "CHI2Bx", "CHI2By", "Current", "Comments")
+  colnames(mind) <- c("CenterZ", "CenterBz", "CenterBy", "CenterBx", "Hole", "Sector", "Run", "File", "CHI2Bz", "CHI2Bx", "CHI2By", "Current", "Comments")
   rp <- read.csv("run-properties.csv")
   
   mind <- merge(mind, rp, by=c("Run"))
@@ -495,17 +495,17 @@ normalizeRundata <- function(rundata){
   return(rundata)
 }
 
-fitted_center <- function(m_item, clabel, comparer, reflector){
-  x <- seq(from=0, to=200, by=.01)
+fitted_center <- function(m_item, clabel, comparer, reflector, multiplier = 1, offset = 0, s=seq(from=-100, to=100, by=.1)){
+  x <- s
   if(exists("mod")){ rm(mod) }
   #print(m_item['Run'])
   # shift off center
   
-  s = seq(from=as.numeric(m_item['CenterZ']) - 2 , to=as.numeric(m_item['CenterZ']) + 2, by=2)
+  s = seq(from=as.numeric(m_item['CenterZ']) - (2 * multiplier) , to=as.numeric(m_item['CenterZ']) + (2 * multiplier), by=2)
   if(as.numeric(m_item['Run']) == 311){
-    s = seq(from=as.numeric(m_item['CenterZ']) - 5, to=as.numeric(m_item['CenterZ']) + 5, by=5)
+    s = seq(from=as.numeric(m_item['CenterZ']) - (5 * multiplier), to=as.numeric(m_item['CenterZ']) +  (5 * multiplier), by=5)
   }
-
+  
   for(i in s){
     yyyy <- getReflectedChiSQ( subset(rundata, Run == as.numeric(m_item['Run'])), i, comparer, reflector)
     #print(head(yyyy))
@@ -524,30 +524,30 @@ fitted_center <- function(m_item, clabel, comparer, reflector){
   
   #print(head(mod))
   
-  threshold <- ifelse(m_item['r']==30, 530000, 100000)
-  pts <- subset(mod, CHI2 < threshold)
-  if(nrow(pts) < 3){
-    pts <- subset(mod, CHI2 < threshold * 10)
-    if(nrow(pts) < 3){
-      pts <- subset(mod, CHI2 < threshold * 100)
-    }
-  }
+  #threshold <- ifelse(m_item['r']==30, 530000, 100000)
+  #pts <- subset(mod, CHI2 < threshold)
+  #if(nrow(pts) < 3){
+  #  pts <- subset(mod, CHI2 < threshold * 10)
+  #  if(nrow(pts) < 3){
+  #    pts <- subset(mod, CHI2 < threshold * 100)
+  #  }
+  #}
   
-  #print(pts)
-  if(!is.numeric(pts$CenterZ)){
+  #mod <- pts
+  
+  if(!is.numeric(mod$CenterZ)){
     return(NaN)
   }
   
   model <- tryCatch(
-    lm(pts$CHI2 ~ pts$CenterZ + I(pts$CenterZ ^ 2) ), error = function(e){
+    lm(mod$CHI2 ~ mod$CenterZ + I(mod$CenterZ ^ 2) ), error = function(e){
       return(NaN)
     }
   )
+  
   if(is.na(model)){
     return(NaN)
   }
-  
-  
   
   df <- data.frame(x)
   df$y <- apply(df, 1, function(p_item){
@@ -557,7 +557,7 @@ fitted_center <- function(m_item, clabel, comparer, reflector){
   df$coefficients3 <- model$coefficients[3]
   df$coefficients2 <- model$coefficients[2]
   df$coefficients1 <- model$coefficients[1]
-  
+  df$distance <- abs(df$y)
   gc()
   jgc()
   file.name <- paste("Fit Data File", clabel, sep = " - ")
@@ -565,7 +565,7 @@ fitted_center <- function(m_item, clabel, comparer, reflector){
   
   mini = subset(df, y == min(df$y))
   #print(head(mini))
-
+  
   return(min(mini$x))
   
 }
@@ -612,4 +612,55 @@ fixModel <- function(model_center){
   model_center$FittedCenterZBy <- 0
   model_center$SensorMeasuringBr <- "Y"
   return(model_center)
+}
+
+
+writeMasterDataDile <- function(m, r){
+  write.xlsx(m, "Master Data File.xlsx", "Meta", row.names = FALSE, append = FALSE)
+  
+  for (ch in levels(rundata$Run)) {
+    gc()
+    jgc()
+    write.xlsx(subset(r, Run == ch), "Master Data File.xlsx", ch, append = TRUE, row.names = FALSE)
+  }
+}
+
+makeBzplot <- function(data, model, scaled = F){
+  if(scaled){
+    p <- plot_ly(data = data, x =~NormalizedZ, 
+                 y = ~ScaledBz, type="scatter", mode="markers", 
+                 name=~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" "), symbol = ~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" ")) %>%
+      add_trace(x =~model_center$NormalizedZ, y = ~model_center$Bz, name = 'Model', type="scatter", mode = 'lines', inherit=FALSE) %>%
+      layout(title = 'Bz vs Z at 0 Radius')
+    
+    return(p)    
+  } else {
+    p <- plot_ly(data = data, x =~NormalizedZ, 
+                 y = ~Bz, type="scatter", mode="markers", 
+                 name=~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" "), symbol = ~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" ")) %>%
+      add_trace(x =~model_center$NormalizedZ, y = ~model_center$Bz, name = 'Model', type="scatter", mode = 'lines', inherit=FALSE) %>%
+      layout(title = 'Bz vs Z at 0 Radius')
+    
+    return(p)    
+  }
+}
+
+makeByplot <- function(data, model, scaled = F){
+  if(scaled){
+    p <- plot_ly(data = data, x =~NormalizedZ, 
+                 y = ~ScaledBy, type="scatter", mode="markers", 
+                 name=~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" "), symbol = ~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" ")) %>%
+      add_trace(x =~model_center$NormalizedZ, y = ~model_center$Bz, name = 'Model', type="scatter", mode = 'lines', inherit=FALSE) %>%
+      layout(title = 'Bz vs Z at 0 Radius')
+    
+    return(p)    
+  } else {
+    p <- plot_ly(data = data, x =~NormalizedZ, 
+                 y = ~NormalizedBy, type="scatter", mode="markers", 
+                 name=~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" "), symbol = ~paste("Run# =", Run, "r = ", r, "Phi = ", theta, "pr = ", pr,sep=" ")) %>%
+      add_trace(x =~model_center$NormalizedZ, y = ~model_center$Bz, name = 'Model', type="scatter", mode = 'lines', inherit=FALSE) %>%
+      layout(title = 'Bz vs Z at 0 Radius')
+    
+    return(p)    
+  }
 }

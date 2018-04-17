@@ -93,7 +93,7 @@ rundata$NormalizedZBx <-apply(rundata, 1, function(x){
   return((as.numeric(x['NormalizedZ']) - 10))
 })
 
-writeMasterDataDile(mind, rundata)
+writeMasterDataFile(mind, rundata)
 
 
 r0 <- subset(rundata, r == 0 & Good == "Y")
@@ -245,10 +245,24 @@ p3 <- makeBzVariencePlot(r_m_data, "Varience v z")
 export(p, file = "Vaience v z at R30.png")
 
 
-max(model_30$Bz) / max(r30_scaled$ScaledBz)
+
+r264 <- subset(rundata, Run == 264)
+r264r <- subset(rundata, Run == 264)
+
+q <- data.frame(85)
+colnames(q) <- c("z")
+r264r <- reflectHoriz(r264, r264r, q)
+r264r$Run <- "264 Reflected"
+  
+rc <- rbind(r264, r264r)
+
+makeReflectPlot(rc, "Bz vs z at r 0 radius with reflection about z=85cm")
+
+max(modelr2_30$Bz) / max(r30_scaled$ScaledBz)
 
 max(subset(mind, RunLength == 'L' & Good == 'Y')$FittedCenterZ) - min(subset(mind, RunLength == 'L' & Good == 'Y')$FittedCenterZ)
 max(subset(mind, RunLength == 'S' & Good == 'Y')$FittedCenterZ) - min(subset(mind, RunLength == 'S' & Good == 'Y')$FittedCenterZ) 
 
-
+mean(subset(mind, RunLength == 'L' & Good == 'Y')$FittedCenterZ)
+mean(subset(mind, RunLength == 'S' & Good == 'Y')$FittedCenterZ)
 #write.xlsx(r30_scaled, "Plot Data File.xlsx", "R30 Scaled", append = TRUE, row.names = FALSE)

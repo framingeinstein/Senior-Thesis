@@ -786,3 +786,22 @@ makeBxPlot <- function(data, model, scaled = F, title){
     return(p)    
   }
 }
+
+
+makeReflectPlot <- function(data, title){
+  y <- list(
+    title = "Bz",
+    titlefont = f
+  )
+  x <- list(
+    title = "z(cm)",
+    titlefont = f
+  )
+  p <- plot_ly(data = data, x =~z, 
+               y = ~Bz, type="scatter", mode="markers", 
+               name=~paste("Run# =", Run, "Phi = ", theta, "pr = ", pr,sep=" "), symbol = ~paste("Run# =", Run, "Phi = ", theta, "pr = ", pr,sep=" ")) %>%
+    layout(title = title, font=f, xaxis= x, yaxis = y)
+  
+  return(p)    
+  
+}

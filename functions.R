@@ -639,8 +639,8 @@ writeMasterDataFile <- function(m, r){
 
 f <- list(
   family = "Courier New, monospace",
-  size = 12,
-  color = "#7f7f7f"
+  size = 13,
+  color = "#000000"
 )
 x <- list(
   title = "Normalized z(cm)",

@@ -249,14 +249,16 @@ export(p, file = "Vaience v z at R30.png")
 r264 <- subset(rundata, Run == 264)
 r264r <- subset(rundata, Run == 264)
 
-q <- data.frame(85)
+q <- data.frame(90)
 colnames(q) <- c("z")
 r264r <- reflectHoriz(r264, r264r, q)
 r264r$Run <- "264 Reflected"
-  
+
 rc <- rbind(r264, r264r)
 
-makeReflectPlot(rc, "Bz vs z at r 0 radius with reflection about z=85cm")
+getReflectedChiSQ(r264, 90, function(d){return(data.frame(d$Bz.x, d$Bz.y))}, reflectHoriz)
+
+makeReflectPlot(rc, "Bz vs z at r 0 radius with reflection about z=90cm")
 
 max(modelr2_30$Bz) / max(r30_scaled$ScaledBz)
 
